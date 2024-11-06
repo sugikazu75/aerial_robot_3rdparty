@@ -9,6 +9,7 @@ import os
 import sys
 import rospy
 import shutil
+from dae2stl import dae2stl
 
 rotor_list = []
 joint_list = []
@@ -29,6 +30,10 @@ def get_filename(filepath):
 def get_directory(filepath):
     return filepath.rsplit("/", 1)[0]
 
+
+def get_extension(filename):
+    before_ext, ext = os.path.splitext(filename)
+    return ext
 
 def remove_extension(filename):
     before_ext, ext = os.path.splitext(filename)
@@ -60,25 +65,28 @@ def process_urdf(package, urdf_path, workdir_path):
         for link_visual in link.findall("visual"):
             for link_visual_geometry in link_visual.findall("geometry"):
                 for link_visual_geometry_mesh in link_visual_geometry.findall("mesh"):
-                    filepath = link_visual_geometry_mesh.attrib["filename"]
+                    mesh_ros_path = link_visual_geometry_mesh.attrib["filename"]
                     search_string = "package://"
-                    index = filepath.find(search_string)
-                    filename = filepath[index + len(search_string):]
-                    filename = filename[filename.find("/"):]
-                    filepath = rospack.get_path(package) + filename
+                    index = mesh_ros_path.find(search_string)
+                    package_to_mesh_path = mesh_ros_path[index + len(search_string):]
+
+                    package_name = package_to_mesh_path[:package_to_mesh_path.find("/")]
+                    mesh_path_after_package_name = package_to_mesh_path[package_to_mesh_path.find("/"):]
+                    mesh_path = rospack.get_path(package_name) + mesh_path_after_package_name
 
                     # modify extention
-                    filename, ex = os.path.splitext(filepath)
-                    filepath = filename + ".stl"
-                    filename = get_filename(filepath)
-
-                    # copy stl to working directory
-                    shutil.copy(filepath, workdir_path)
+                    stl_path = ""
+                    if(get_extension(mesh_path) == ".stl"):
+                        shutil.copy(mesh_path, workdir_path)
+                        stl_path = os.path.join(workdir_path, get_filename( mesh_path))
+                    elif(get_extension(mesh_path) == ".dae"):
+                        stl_path = os.path.join(workdir_path, get_filename(remove_extension(mesh_path) + ".stl"))
+                        dae2stl(mesh_path, stl_path)
 
                     # add geometry in visual tag
                     geometry_elem = ET.Element('geometry')
                     mesh_elem = ET.Element("mesh")
-                    mesh_elem.set("filename", filename)
+                    mesh_elem.set("filename", stl_path)
                     geometry_elem.append(mesh_elem)
                     link_visual.remove(link_visual_geometry)
                     link_visual.append(geometry_elem)
@@ -436,18 +444,19 @@ with open(config_path) as file:
     for package in obj["package"]:
         print(package)
         pkg_path = rospack.get_path(package)
-        meshdir = os.path.join(pkg_path, obj[package]["meshdir"])
         if os.path.isdir(os.path.join(pkg_path, "mujoco")):
             shutil.rmtree(os.path.join(pkg_path, "mujoco"))
-        convert_dae2stl(meshdir)
-        for (input_path, filename) in zip(obj[package]["input"], obj[package]["filename"]):
+        for(input_path, filename) in zip(obj[package]["input"], obj[package]["filename"]):
             input_xacro_path = os.path.join(pkg_path, input_path)
             workdir_path = os.path.join(pkg_path, "mujoco", filename)
             output_urdf_path = os.path.join(workdir_path, "robot.urdf")
 
             os.makedirs(workdir_path)
 
-            run_xacro(input_xacro_path, output_urdf_path)
+            if(get_extension(input_xacro_path) == ".xacro"):
+                run_xacro(input_xacro_path, output_urdf_path)
+            elif(get_extension(input_xacro_path) == ".urdf"):
+                shutil.copy(input_xacro_path, output_urdf_path)
 
             process_urdf(package, output_urdf_path, workdir_path)
 
@@ -455,5 +464,3 @@ with open(config_path) as file:
             generate_xml(output_urdf_path, mujoco_path)
 
             process_xml(output_urdf_path, mujoco_path)
-
-        remove_stl(meshdir)
