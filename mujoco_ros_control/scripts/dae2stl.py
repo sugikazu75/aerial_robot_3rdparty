@@ -1,28 +1,10 @@
 #!/usr/bin/env python
-import os
-import subprocess
+
+from common import *
 import sys
 
-
-def run_subprocess(cmd):
-    if sys.version.split(".")[0] == "2":
-        subprocess.call(cmd, shell=True)
-    if sys.version.split(".")[0] == "3":
-        subprocess.run(cmd, shell=True)
-
-def get_filename(filepath):
-    return filepath.rsplit("/", 1)[1]
-
-def get_extension(filename):
-    before_ext, ext = os.path.splitext(filename)
-    return ext
-
-def remove_extension(filename):
-    before_ext, ext = os.path.splitext(filename)
-    return before_ext
-
 def dae2stl(dae_path, stl_path):
-    cmd = "meshlabserver -i {} -o {}".format(dae_path, stl_path)
+    cmd = "meshlabserver -i {} -o {} > /dev/null 2>&1".format(dae_path, stl_path)
     run_subprocess(cmd)
 
 def main():

@@ -1,49 +1,19 @@
 #!/usr/bin/env python
 
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
-import subprocess
-import yaml
-import rospkg
+from common import *
+from dae2stl import dae2stl
 import os
-import sys
+import rospkg
 import rospy
 import shutil
-from dae2stl import dae2stl
+import sys
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
+import yaml
 
 rotor_list = []
 joint_list = []
 rospack = rospkg.RosPack()
-
-
-def run_subprocess(cmd):
-    if sys.version.split(".")[0] == "2":
-        subprocess.call(cmd, shell=True)
-    if sys.version.split(".")[0] == "3":
-        subprocess.run(cmd, shell=True)
-
-
-def get_filename(filepath):
-    return filepath.rsplit("/", 1)[1]
-
-
-def get_directory(filepath):
-    return filepath.rsplit("/", 1)[0]
-
-
-def get_extension(filename):
-    before_ext, ext = os.path.splitext(filename)
-    return ext
-
-def remove_extension(filename):
-    before_ext, ext = os.path.splitext(filename)
-    return before_ext
-
-
-def run_xacro(input_path, output_path):
-    cmd = "rosrun xacro xacro {} > {}".format(input_path, output_path)
-    run_subprocess(cmd)
-
 
 def process_urdf(package, urdf_path, workdir_path):
     global rotor_list
@@ -74,21 +44,23 @@ def process_urdf(package, urdf_path, workdir_path):
                     mesh_path_after_package_name = package_to_mesh_path[package_to_mesh_path.find("/"):]
                     mesh_path = rospack.get_path(package_name) + mesh_path_after_package_name
 
-                    # modify extention
+                    # modify extention and convert dae to stl
                     stl_path = ""
                     if(get_extension(mesh_path) == ".stl"):
+                        stl_path = os.path.join(workdir_path, get_filename(mesh_path))
                         shutil.copy(mesh_path, workdir_path)
-                        stl_path = os.path.join(workdir_path, get_filename( mesh_path))
                     elif(get_extension(mesh_path) == ".dae"):
                         stl_path = os.path.join(workdir_path, get_filename(remove_extension(mesh_path) + ".stl"))
                         dae2stl(mesh_path, stl_path)
+                    else:
+                        sys.exit("Error: .stl and .dae is available for extension of mesh")
 
-                    # add geometry in visual tag
+                    # set only mesh geometry in visual tag
+                    link_visual.remove(link_visual_geometry)
                     geometry_elem = ET.Element('geometry')
                     mesh_elem = ET.Element("mesh")
                     mesh_elem.set("filename", stl_path)
                     geometry_elem.append(mesh_elem)
-                    link_visual.remove(link_visual_geometry)
                     link_visual.append(geometry_elem)
 
     # replace collision tag by mesh
@@ -414,24 +386,6 @@ def process_xml(urdf_path, mujoco_path):
     # remove intermediate urdf file
     # os.remove(urdf_path)
 
-
-def convert_dae2stl(meshdir):
-    mujoco_ros_control = rospack.get_path("mujoco_ros_control")
-    cmd = "blender -b -P {} -- {} > /dev/null 2>&1".format(os.path.join(mujoco_ros_control, "scripts/convert.py"), meshdir)
-    run_subprocess(cmd)
-
-
-def remove_stl(meshdir):
-    for foldername, subfolders, filenames in os.walk(meshdir):
-        for filename in filenames:
-            if filename.endswith(".stl"):
-                dae_name = remove_extension(filename) + ".dae"
-                dae_path = os.path.join(foldername, dae_name)
-                stl_path = os.path.join(foldername, filename)
-                if os.path.isfile(dae_path):
-                    os.remove(stl_path)
-
-
 config_path = ""
 if(len(sys.argv) == 2):
     config_path = sys.argv[1]
@@ -450,6 +404,7 @@ with open(config_path) as file:
             input_xacro_path = os.path.join(pkg_path, input_path)
             workdir_path = os.path.join(pkg_path, "mujoco", filename)
             output_urdf_path = os.path.join(workdir_path, "robot.urdf")
+            mujoco_path = os.path.join(workdir_path, "robot.xml")
 
             os.makedirs(workdir_path)
 
@@ -460,7 +415,6 @@ with open(config_path) as file:
 
             process_urdf(package, output_urdf_path, workdir_path)
 
-            mujoco_path = os.path.join(workdir_path, "robot.xml")
             generate_xml(output_urdf_path, mujoco_path)
 
             process_xml(output_urdf_path, mujoco_path)
