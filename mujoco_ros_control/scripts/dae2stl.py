@@ -38,4 +38,5 @@ def main():
     else:
         print("variable error")
 
-main()
+if __name__ == "__main__":
+    main()
