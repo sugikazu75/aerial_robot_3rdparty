@@ -120,13 +120,14 @@ def process_xml(urdf_path, mujoco_path):
     mujoco_parent_map = dict((c, p) for p in mujoco_tree.iter() for c in p)
     urdf_parent_map = dict((c, p) for p in urdf_tree.iter() for c in p)
 
+    # mujoco setting
+    compiler = mujoco_root.find("compiler")
+    compiler.set("balanceinertia", "true")
+
     # get m_f_rate from urdf
     m_f_rate = 0.0
     for m_f_rate_elem in urdf_root.iter("m_f_rate"):
         m_f_rate = m_f_rate_elem.attrib["value"]
-
-    compiler = mujoco_root.find("compiler")
-    compiler.set("balanceinertia", "true")
 
     # process joints
     thrusts = ""
