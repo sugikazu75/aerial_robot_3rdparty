@@ -6,7 +6,7 @@ def run_subprocess(cmd):
     if sys.version.split(".")[0] == "2":
         subprocess.call(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     if sys.version.split(".")[0] == "3":
-        subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(cmd, shell=True)
 
 def get_filename(filepath):
     return os.path.basename(filepath)

@@ -25,6 +25,7 @@ class DefaultRobotMujocoModelGenerator:
 
         original_urdf_path = os.path.join(workdir_path, "robot_orig.urdf")
         fixed_urdf_path = os.path.join(workdir_path, "robot.urdf")
+        original_mujoco_model_path = remove_extension(mujoco_xml_path) + "_orig.xml"
 
         if(get_extension(input_model_path) == ".xacro"):
             run_xacro(input_model_path, original_urdf_path)
@@ -34,7 +35,8 @@ class DefaultRobotMujocoModelGenerator:
 
         get_actuators(original_urdf_path)
         process_urdf(fixed_urdf_path)
-        generate_xml(fixed_urdf_path, mujoco_xml_path)
+        generate_xml(fixed_urdf_path, original_mujoco_model_path)
+        shutil.copy(original_mujoco_model_path, mujoco_xml_path)
         process_xml(fixed_urdf_path, mujoco_xml_path)
 
 
@@ -421,9 +423,6 @@ def process_xml(urdf_path, mujoco_path):
     # remove brank line in xml
     cmd = "sed -i '/^[[:space:]]*$/d' {}".format(mujoco_path)
     run_subprocess(cmd)
-
-    # remove intermediate urdf file
-    # os.remove(urdf_path)
 
 
 if __name__ == "__main__":
