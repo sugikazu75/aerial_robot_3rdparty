@@ -4,7 +4,7 @@ from common import *
 import sys
 
 def dae2stl(dae_path, stl_path):
-    cmd = "meshlabserver -i {} -o {} > /dev/null 2>&1".format(dae_path, stl_path)
+    cmd = "meshlabserver -i {} -o {}".format(dae_path, stl_path)
     run_subprocess(cmd)
 
 def main():

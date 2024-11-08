@@ -15,13 +15,39 @@ rotor_list = []
 joint_list = []
 rospack = rospkg.RosPack()
 
-def process_urdf(package, urdf_path, workdir_path):
-    global rotor_list
-    global joint_list
-    rotor_list = []
-    joint_list = []
+class DefaultRobotMujocoModelGenerator:
+    def __init__(self, input_model_path, mujoco_xml_path):
+        workdir_path = get_directory(mujoco_xml_path)
+
+        if(os.path.isdir(workdir_path)):
+            shutil.rmtree(workdir_path)
+        os.makedirs(workdir_path)
+
+        original_urdf_path = os.path.join(workdir_path, "robot_orig.urdf")
+        fixed_urdf_path = os.path.join(workdir_path, "robot.urdf")
+
+        if(get_extension(input_model_path) == ".xacro"):
+            run_xacro(input_model_path, original_urdf_path)
+        elif(get_extension(input_model_path) == ".urdf"):
+            shutil.copy(input_model_path, original_urdf_path)
+        shutil.copy(original_urdf_path, fixed_urdf_path)
+
+        get_actuators(original_urdf_path)
+        process_urdf(fixed_urdf_path)
+        generate_xml(fixed_urdf_path, mujoco_xml_path)
+        process_xml(fixed_urdf_path, mujoco_xml_path)
+
+
+class AerialRobotMujocoModelGenerator:
+    def __init__(self, original_urdf_path):
+        pass
+
+
+def process_urdf(urdf_path):
     urdf_tree = ET.parse(urdf_path)
     urdf_root = urdf_tree.getroot()
+
+    workdir_path = get_directory(urdf_path)
 
     # add mujoco config
     mujoco = ET.Element('mujoco')
@@ -82,15 +108,8 @@ def process_urdf(package, urdf_path, workdir_path):
         if visual_exist:
             link.append(collision_tag)
 
-    # get actuator list
+    # remove actuators
     for transmission in urdf_root.findall("transmission"):
-        for transmission_joint in transmission.findall("joint"):
-            name = transmission_joint.attrib["name"]
-            for transmission_joint_hardwareinterface in transmission_joint.findall("hardwareInterface"):
-                if transmission_joint_hardwareinterface.text == "RotorInterface":
-                    rotor_list.append(name)
-                if transmission_joint_hardwareinterface.text == "hardware_interface/EffortJointInterface":
-                    joint_list.append(name)
         urdf_root.remove(transmission)
 
     # output modified urdf
@@ -103,12 +122,31 @@ def process_urdf(package, urdf_path, workdir_path):
     run_subprocess(cmd)
 
 
+def get_actuators(urdf_path):
+    global rotor_list
+    global joint_list
+    rotor_list = []
+    joint_list = []
+    urdf_tree = ET.parse(urdf_path)
+    urdf_root = urdf_tree.getroot()
+
+    for transmission in urdf_root.findall("transmission"):
+        for transmission_joint in transmission.findall("joint"):
+            name = transmission_joint.attrib["name"]
+            for transmission_joint_hardwareinterface in transmission_joint.findall("hardwareInterface"):
+                if transmission_joint_hardwareinterface.text == "RotorInterface":
+                    rotor_list.append(name)
+                if transmission_joint_hardwareinterface.text == "hardware_interface/EffortJointInterface":
+                    joint_list.append(name)
+
+
 def generate_xml(urdf_path, mujoco_path):
     # compile by mujoco
     mujoco_ros_control = rospack.get_path("mujoco_ros_control")
     mujoco_compile_path = os.path.join(mujoco_ros_control, "build/mujoco-2.3.7/bin/compile")
     cmd = "{} {} {}".format(mujoco_compile_path, urdf_path, mujoco_path)
     run_subprocess(cmd)
+
 
 def process_xml(urdf_path, mujoco_path):
     mujoco_tree = ET.parse(mujoco_path)
@@ -387,35 +425,10 @@ def process_xml(urdf_path, mujoco_path):
     # remove intermediate urdf file
     # os.remove(urdf_path)
 
-config_path = ""
-if(len(sys.argv) == 2):
-    config_path = sys.argv[1]
-else:
-    print("Variable error! Please run following command.\nrosrun mujoco_ros_control mujoco_model_generator.py absolute_path_to_config_file")
-    sys.exit()
 
-with open(config_path) as file:
-    obj = yaml.safe_load(file)
-    for package in obj["package"]:
-        print(package)
-        pkg_path = rospack.get_path(package)
-        if os.path.isdir(os.path.join(pkg_path, "mujoco")):
-            shutil.rmtree(os.path.join(pkg_path, "mujoco"))
-        for(input_path, filename) in zip(obj[package]["input"], obj[package]["filename"]):
-            input_xacro_path = os.path.join(pkg_path, input_path)
-            workdir_path = os.path.join(pkg_path, "mujoco", filename)
-            output_urdf_path = os.path.join(workdir_path, "robot.urdf")
-            mujoco_path = os.path.join(workdir_path, "robot.xml")
+if __name__ == "__main__":
+    input_model_path = sys.argv[1]
+    mujoco_xml_path = sys.argv[2]
 
-            os.makedirs(workdir_path)
+    DefaultRobotMujocoModelGenerator(input_model_path, mujoco_xml_path)
 
-            if(get_extension(input_xacro_path) == ".xacro"):
-                run_xacro(input_xacro_path, output_urdf_path)
-            elif(get_extension(input_xacro_path) == ".urdf"):
-                shutil.copy(input_xacro_path, output_urdf_path)
-
-            process_urdf(package, output_urdf_path, workdir_path)
-
-            generate_xml(output_urdf_path, mujoco_path)
-
-            process_xml(output_urdf_path, mujoco_path)
