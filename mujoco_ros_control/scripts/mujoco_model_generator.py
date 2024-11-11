@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from common import *
-from dae2stl import dae2stl
+from dae2stl_meshlab import dae2stl
 import os
 import rospkg
 import rospy
