@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+
+from common import *
+
+def main():
+    if len(sys.argv) == 3:
+        dae_path = sys.argv[1]
+        stl_path = sys.argv[2]
+        if(get_extension(dae_path) == ".dae"):
+            print("convert", dae_path, "to", stl_path)
+            cmd = "blender -b -P convert.py -- {} {}".format(dae_path, stl_path)
+            run_subprocess(cmd)
+        else:
+            print("extension of", dae_path, "is not .dae")
+            return
+    else:
+        print("variable error")
+        return
+
+if __name__ == "__main__":
+    main()

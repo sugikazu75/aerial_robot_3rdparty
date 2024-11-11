@@ -11,7 +11,7 @@ def dae2stl(dae_path, stl_path):
 def main():
     if len(sys.argv) == 2:
         dae_path = sys.argv[1]
-        stl_path = remove_extension(dae_path) + ".stl"
+        stl_path = sys.argv[2]
         if(get_extension(dae_path) == ".dae"):
             print("convert", dae_path, "to", stl_path)
             dae2stl(dae_path, stl_path)
