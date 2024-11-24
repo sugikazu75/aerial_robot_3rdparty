@@ -19,7 +19,7 @@ if(${CODENAME} MATCHES "xenial")
   set(GIT_TAG 338447d)
    set(PATCH "s/set\(CMAKE_CXX_STANDARD\ 14\)/add_compile_options\(-std=c++17\)/g")
 else()
-  set(GIT_TAG v0.6.2)
+  set(GIT_TAG PR/suppress_debug_message)
   set(PATCH "s/cxx_std_14/cxx_std_17/g")
 endif()
 
@@ -29,7 +29,7 @@ execute_process(COMMAND
 # find_package(Boost REQUIRED COMPONENTS system)
 ExternalProject_Add(
   osqp-eigen
-  GIT_REPOSITORY https://github.com/robotology/osqp-eigen
+  GIT_REPOSITORY https://github.com/sugikazu75/osqp-eigen
   GIT_TAG ${GIT_TAG}
   PATCH_COMMAND
     COMMAND sed -i -e ${PATCH} CMakeLists.txt
