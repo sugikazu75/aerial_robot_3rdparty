@@ -1,19 +1,64 @@
 #!/usr/bin/env python
 
+"""Generate a MuJoCo model from a robot's xacro, under either ROS version.
+
+Almost all of this is XML manipulation and has nothing to do with ROS. Four
+things do, and they are collected at the top:
+
+  - where a package's directory is,
+  - how the MuJoCo `compile` tool is run,
+  - how xacro is run,
+  - where this package's own config/world.xml is.
+
+The last one is answered relative to this file under both versions, which is
+both simpler and correct before the package has been installed.
+"""
+
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
+import argparse
 import subprocess
 import yaml
-import rospkg
 import os
 import sys
-import rospy
 import shutil
-from convert import convert_dae_to_stl
+from convert import config_dir, convert_dae_to_stl
 
 rotor_list = []
 joint_list = []
-rospack = rospkg.RosPack()
+
+# The rest of the stack selects on this too; see docs/ros2_migration.md in
+# jsk_aerial_robot. It is an environment variable, set by both distributions'
+# setup files.
+ROS_VERSION = int(os.environ.get("ROS_VERSION", "1"))
+
+WORLD_PATH = os.path.join(config_dir(), "world.xml")
+
+# Filled from --package-dir; see package_dir().
+package_dir_overrides = {}
+
+
+def package_dir(package):
+    """The directory a robot package's `mujoco/` output belongs under.
+
+    Under ROS1 rospack answers with the *source* directory, because a catkin
+    devel space points back at it, and that is where these models have always
+    been written. ROS2's ament index only knows the installed share directory,
+    which is somewhere else and is replaced on every rebuild - so under ROS2
+    the caller passes the source directory in with --package-dir. The cmake
+    macro has it as ${PROJECT_SOURCE_DIR}.
+    """
+    if package in package_dir_overrides:
+        return package_dir_overrides[package]
+
+    if ROS_VERSION == 1:
+        import rospkg
+        return rospkg.RosPack().get_path(package)
+
+    raise RuntimeError(
+        "no directory known for package '{}'. Under ROS2 the generator cannot "
+        "guess it - the ament index only knows the install share directory - so "
+        "pass --package-dir {}=<path to the package source>.".format(package, package))
 
 
 def run_subprocess(cmd):
@@ -37,7 +82,10 @@ def remove_extension(filename):
 
 
 def run_xacro(input_path, output_path):
-    cmd = "rosrun xacro xacro {} > {}".format(input_path, output_path)
+    # ROS2 installs xacro as a console script on PATH; ROS1 reaches it through
+    # rosrun.
+    xacro = "xacro" if ROS_VERSION == 2 else "rosrun xacro xacro"
+    cmd = "{} {} > {}".format(xacro, input_path, output_path)
     run_subprocess(cmd)
 
 
@@ -72,7 +120,7 @@ def process_urdf(package, urdf_path, workdir_path):
                     index = original_filepath.find(search_string)
                     filepath_with_pkg = original_filepath[index + len(search_string):]
                     filepath_from_pkg = filepath_with_pkg[filepath_with_pkg.find("/"):]
-                    filepath = rospack.get_path(package) + filepath_from_pkg
+                    filepath = package_dir(package) + filepath_from_pkg
                     mujoco_mesh_path = ""
 
                     # generate stl in mujoco workdir
@@ -149,7 +197,11 @@ def process_urdf(package, urdf_path, workdir_path):
 
 
 def generate_xml(urdf_path, mujoco_path):
-    cmd = "rosrun mujoco compile {} {}".format(urdf_path, mujoco_path)
+    # MuJoCo's own compile tool, from the official binaries the `mujoco` package
+    # wraps. Both versions install it as that package's executable, so the only
+    # difference is the launcher.
+    runner = "ros2 run mujoco compile" if ROS_VERSION == 2 else "rosrun mujoco compile"
+    cmd = "{} {} {}".format(runner, urdf_path, mujoco_path)
     run_subprocess(cmd)
 
 def process_xml(urdf_path, mujoco_path):
@@ -418,11 +470,21 @@ def process_xml(urdf_path, mujoco_path):
     mujoco_root.append(sensor_elem)
 
     # include world
-    mujoco_ros_utils = rospack.get_path("mujoco_ros_utils")
-    world_path = os.path.join(mujoco_ros_utils, "config/world.xml")
-    rel_path = os.path.relpath(world_path, get_directory(mujoco_path))
+    model_dir = get_directory(mujoco_path)
+    if ROS_VERSION == 1:
+        # A path relative to the source tree, which is where a catkin workspace
+        # keeps both this package and the robot's. Unchanged, so the ROS1 output
+        # stays byte-identical.
+        world_ref = os.path.relpath(WORLD_PATH, model_dir)
+    else:
+        # Copied in beside the model instead. Under ROS2 a robot package is
+        # *installed* somewhere else entirely, and a relative path out of the
+        # generated directory would not survive that; a self-contained
+        # directory installs as one piece.
+        shutil.copy(WORLD_PATH, model_dir)
+        world_ref = os.path.basename(WORLD_PATH)
     include_elem = ET.Element("include")
-    include_elem.set("file", rel_path)
+    include_elem.set("file", world_ref)
     mujoco_root.append(include_elem)
 
     # output modified mujoco model
@@ -438,24 +500,34 @@ def process_xml(urdf_path, mujoco_path):
     # os.remove(urdf_path)
 
 
-config_path = ""
-if(len(sys.argv) == 2):
-    config_path = sys.argv[1]
-else:
-    print("Variable error! Please run following command.\nrosrun mujoco_ros_utils mujoco_model_generator.py absolute_path_to_config_file")
-    sys.exit()
+parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+parser.add_argument("config", help="the robot's mujoco_model.yaml")
+parser.add_argument("--package-dir", action="append", default=[], metavar="NAME=PATH",
+                    help="where a package's sources are. Required under ROS2, "
+                         "where the ament index cannot answer it; see package_dir().")
+args = parser.parse_args()
+
+for entry in args.package_dir:
+    name, _, path = entry.partition("=")
+    if not path:
+        parser.error("--package-dir wants NAME=PATH, got '{}'".format(entry))
+    package_dir_overrides[name] = os.path.abspath(path)
+
+config_path = args.config
 
 with open(config_path) as file:
     obj = yaml.safe_load(file)
     for package in obj["package"]:
         print(package)
-        pkg_path = rospack.get_path(package)
+        pkg_path = package_dir(package)
         for (input_path, filename) in zip(obj[package]["input"], obj[package]["filename"]):
             input_xacro_path = os.path.join(pkg_path, input_path)
             workdir_path = os.path.join(pkg_path, "mujoco", filename)
             output_urdf_path = os.path.join(workdir_path, "robot.urdf")
 
-            os.makedirs(workdir_path)
+            # exist_ok: the ROS1 cmake rule guards on the directory and so runs
+            # only once, but a hand-run regeneration should not need a wipe.
+            os.makedirs(workdir_path, exist_ok=True)
 
             run_xacro(input_xacro_path, output_urdf_path)
 

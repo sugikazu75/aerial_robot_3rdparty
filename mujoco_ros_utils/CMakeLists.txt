@@ -1,11 +1,18 @@
-cmake_minimum_required(VERSION 3.0.2)
+# 3.14 rather than the 3.0.2 the catkin build asked for: ament_package needs
+# policies (IN_LIST, for one) that the older minimum leaves switched off.
+cmake_minimum_required(VERSION 3.14)
 project(mujoco_ros_utils)
 
-add_compile_options(-std=c++17)
+if(DEFINED ENV{ROS_VERSION})
+  set(ROS_VERSION $ENV{ROS_VERSION})
+else()
+  message(FATAL_ERROR "ROS_VERSION is not defined")
+endif()
 
-find_package(catkin REQUIRED COMPONENTS
-  )
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
-catkin_package(
-  CFG_EXTRAS model_convert.cmake #https://answers.ros.org/question/243016/add_definitions-package-exportation/
-)
+if(ROS_VERSION EQUAL 1)
+  include(Ros1)
+else()
+  include(Ros2)
+endif()

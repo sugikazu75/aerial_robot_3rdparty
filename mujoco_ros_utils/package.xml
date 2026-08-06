@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
-<package>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>mujoco_ros_utils</name>
   <version>0.0.0</version>
   <description>The mujoco_ros_utils package</description>
@@ -10,10 +11,22 @@
 
   <author>Kazuki Sugihara</author>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend condition="$ROS_VERSION == 1">catkin</buildtool_depend>
+  <buildtool_depend condition="$ROS_VERSION == 2">ament_cmake</buildtool_depend>
 
-  <run_depend>meshlab</run_depend>
-  <run_depend>mujoco</run_depend>
-  <run_depend>xvfb</run_depend>
+  <!-- meshlabserver turns .dae meshes into the .stl MuJoCo wants, under xvfb
+       because it insists on a display; mujoco supplies the compile tool. -->
+  <exec_depend>meshlab</exec_depend>
+  <exec_depend>mujoco</exec_depend>
+  <exec_depend>xvfb</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
+  <exec_depend condition="$ROS_VERSION == 1">rospkg</exec_depend>
+
+  <export>
+    <build_type condition="$ROS_VERSION == 1">catkin</build_type>
+    <build_type condition="$ROS_VERSION == 2">ament_cmake</build_type>
+  </export>
 
 </package>
