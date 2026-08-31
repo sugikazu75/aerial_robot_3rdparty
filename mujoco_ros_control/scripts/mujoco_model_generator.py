@@ -77,6 +77,8 @@ def process_urdf(package, urdf_path, workdir_path):
                         convert_dae_to_stl(dae_filepath, stl_filepath)
 
                         filename = get_filename(stl_filepath) # udpate filename to stl
+                    elif ex == ".stl" or ex == ".STL":
+                        shutil.copy(filepath, workdir_path)
 
 
                     # add geometry in visual tag
