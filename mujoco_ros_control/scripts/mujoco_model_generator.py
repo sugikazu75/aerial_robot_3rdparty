@@ -9,6 +9,7 @@ import os
 import sys
 import rospy
 import shutil
+from convert import process_subdirectories
 
 rotor_list = []
 joint_list = []
@@ -407,13 +408,6 @@ def process_xml(urdf_path, mujoco_path):
     # os.remove(urdf_path)
 
 
-def convert_dae2stl(meshdir):
-    mujoco_ros_control = rospack.get_path("mujoco_ros_control")
-    cmd = "python {} {}".format(os.path.join(mujoco_ros_control, "scripts/convert.py"), meshdir)
-    print(cmd)
-    run_subprocess(cmd)
-
-
 def remove_stl(meshdir):
     for foldername, subfolders, filenames in os.walk(meshdir):
         for filename in filenames:
@@ -440,7 +434,7 @@ with open(config_path) as file:
         meshdir = os.path.join(pkg_path, obj[package]["meshdir"])
         if os.path.isdir(os.path.join(pkg_path, "mujoco")):
             shutil.rmtree(os.path.join(pkg_path, "mujoco"))
-        convert_dae2stl(meshdir)
+        process_subdirectories(meshdir)
         for (input_path, filename) in zip(obj[package]["input"], obj[package]["filename"]):
             input_xacro_path = os.path.join(pkg_path, input_path)
             workdir_path = os.path.join(pkg_path, "mujoco", filename)
