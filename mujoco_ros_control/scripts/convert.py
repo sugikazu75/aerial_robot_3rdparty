@@ -24,12 +24,3 @@ def convert_dae_to_stl(input_dae, output_stl):
 
     cmd = "xvfb-run -a meshlabserver -i {} -o {} -m binary -s {}".format(input_dae, output_stl, filter_path)
     run_subprocess(cmd)
-
-
-def process_subdirectories(root):
-    for foldername, subfolders, filenames in os.walk(root):
-        for filename in filenames:
-            if filename.endswith(".dae"):
-                input_file = os.path.join(foldername, filename)
-                output_file = os.path.join(foldername, os.path.splitext(filename)[0] + ".stl")
-                convert_dae_to_stl(input_file, output_file)

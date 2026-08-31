@@ -9,7 +9,7 @@ import os
 import sys
 import rospy
 import shutil
-from convert import process_subdirectories
+from convert import convert_dae_to_stl
 
 rotor_list = []
 joint_list = []
@@ -68,13 +68,16 @@ def process_urdf(package, urdf_path, workdir_path):
                     filename = filename[filename.find("/"):]
                     filepath = rospack.get_path(package) + filename
 
-                    # modify extention
-                    filename, ex = os.path.splitext(filepath)
-                    filepath = filename + ".stl"
-                    filename = get_filename(filepath)
+                    # if mesh is dae, convert to stl
+                    _, ex = os.path.splitext(filepath)
+                    if ex == ".dae" or ex == ".DAE":
+                        dae_filepath = filepath
+                        stl_filepath = os.path.join(workdir_path, remove_extension(get_filename(filename)) + ".stl")
 
-                    # copy stl to working directory
-                    shutil.copy(filepath, workdir_path)
+                        convert_dae_to_stl(dae_filepath, stl_filepath)
+
+                        filename = get_filename(stl_filepath) # udpate filename to stl
+
 
                     # add geometry in visual tag
                     geometry_elem = ET.Element('geometry')
@@ -408,17 +411,6 @@ def process_xml(urdf_path, mujoco_path):
     # os.remove(urdf_path)
 
 
-def remove_stl(meshdir):
-    for foldername, subfolders, filenames in os.walk(meshdir):
-        for filename in filenames:
-            if filename.endswith(".stl"):
-                dae_name = remove_extension(filename) + ".dae"
-                dae_path = os.path.join(foldername, dae_name)
-                stl_path = os.path.join(foldername, filename)
-                if os.path.isfile(dae_path):
-                    os.remove(stl_path)
-
-
 config_path = ""
 if(len(sys.argv) == 2):
     config_path = sys.argv[1]
@@ -431,10 +423,9 @@ with open(config_path) as file:
     for package in obj["package"]:
         print(package)
         pkg_path = rospack.get_path(package)
-        meshdir = os.path.join(pkg_path, obj[package]["meshdir"])
         if os.path.isdir(os.path.join(pkg_path, "mujoco")):
             shutil.rmtree(os.path.join(pkg_path, "mujoco"))
-        process_subdirectories(meshdir)
+
         for (input_path, filename) in zip(obj[package]["input"], obj[package]["filename"]):
             input_xacro_path = os.path.join(pkg_path, input_path)
             workdir_path = os.path.join(pkg_path, "mujoco", filename)
@@ -450,5 +441,3 @@ with open(config_path) as file:
             generate_xml(output_urdf_path, mujoco_path)
 
             process_xml(output_urdf_path, mujoco_path)
-
-        remove_stl(meshdir)
